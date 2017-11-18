@@ -69,10 +69,10 @@ elif Loc == 6:
 elif Loc == 7:
     Pos = Panama
     
-lowtime = '01/01/2013'
-hightime = '01/01/2014'
+lowtime = '01/01/2012'
+hightime = '01/01/2015'
 maxspeed = 25
-minspeed = 0
+minspeed = 5
     
 #PV calls PlotVessels.py, which essentially does all data extracting, initial analyses,
 #and visualizations of AIS data.  
