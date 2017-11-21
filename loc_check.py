@@ -34,14 +34,14 @@ def generate_polygons():
     polygon_atlantic.append(polygon_atlantic[0]) #Adding the first point 
     polygons.append(polygon_atlantic)
     # East Pacific 
-    polygon_Eastpacific =[[-142,60] ,
-                        [-103.227539,25.443275] ,
-                        [-76.245117,7.31882],
-                        [-60.644531,-18.646245] ,
-                        [-73.476562,-62.267923] ,
-                        [-179.296875,-36.315125],
-                        [-180,47.989922],
-                        [-180,58.077876]]
+    polygon_Eastpacific =[[-142,70] ,
+                      [-103.227539,25.443275] ,
+                      [-76.245117,7.31882],
+                      [-60.644531,-18.646245] ,
+                      [-73.476562,-62.267923] ,
+                      [-180,-36.315125],
+                      [-180,47.989922],
+                      [-180,58.077876]]
     polygon_Eastpacific.append(polygon_Eastpacific[0])
     polygons.append(polygon_Eastpacific)
     # West Pacific
