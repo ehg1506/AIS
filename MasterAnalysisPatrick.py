@@ -9,8 +9,8 @@ Created on Fri Feb 17 10:52:25 2017
 import PlotVesselPatrick as PV
 import datetime
 
-#Database = '/Users/PatrickAndreNaess/Desktop/ContainerFleet.db'
-Database ='/Users/erikgrundt/Desktop/ContainerFleet.db'
+Database = '/Users/PatrickAndreNaess/Desktop/ContainerFleet.db'
+#Database ='/Users/erikgrundt/Desktop/ContainerFleet.db'
 #Database = '/Volumes/LaCie/NTNUfilesMac/ContainerFleet.db'
 ports = '/Users/PatrickAndreNaess/Documents/PYTHON/LINERLIB-master/data/ports.csv'
 
@@ -33,10 +33,10 @@ DraughtAnalysis = 0
 OrnsteinUhlenbeckGenerator = 0
 
 ClusterPorts = 0
-WriteOutTable = 0
+#WriteOutTable = 0 Denne er puttet inn i WorldOceanAnalysis
 PortAnalysis = 0
 Network = 0
-WorldOceanAnalysis = 1
+WorldOceanAnalysis = 1 
 
 BigShips = 1
 Panamax = 0
@@ -68,26 +68,26 @@ elif Loc == 6:
     Pos = CapeAfrica
 elif Loc == 7:
     Pos = Panama
-    
-lowtime = '01/01/2012'
-hightime = '01/01/2015'
+
+#Always analyse from 01/xx/xxxx --> PolygonAnalysis
+lowtime = '01/01/2013'
+hightime = '01/01/2016'
 maxspeed = 25
 minspeed = 5
+
+unixlow = datetime.datetime.strptime(lowtime, "%d/%m/%Y").timestamp()
+unixhigh = datetime.datetime.strptime(hightime, "%d/%m/%Y").timestamp()
     
 #PV calls PlotVessels.py, which essentially does all data extracting, initial analyses,
 #and visualizations of AIS data.  
 if SegmentAnalysis == 1:
-    PV.ExtractData(Database,Pos[0],Pos[1],Pos[2],Pos[3] \
-                   ,datetime.datetime.strptime(lowtime, "%d/%m/%Y").timestamp() \
-                   ,datetime.datetime.strptime(hightime, "%d/%m/%Y").timestamp() \
+    PV.ExtractData(Database,Pos[0],Pos[1],Pos[2],Pos[3],unixlow,unixhigh \
                    ,maxspeed,minspeed,SegmentAnalysis)
 else:
     PV.ExtractData(Vessel,Pos[0],Pos[1],Pos[2],Pos[3])
 
 if ClusterPorts == 1:
    clusterlat,clusterlon,Hcluster = PV.DataClusterPorts(ports)
-if WorldOceanAnalysis == 1:
-    PV.PolygonAnalysis()
 
 if GlobalMap == 1:    
     PV.GlobalMap()
@@ -117,11 +117,14 @@ if CumulatedSpeed == 1:
     PV.CumulatedSpeed()    
 if DraughtAnalysis == 1:
     PV.DraughtAnalysis()
+
     
 if PortAnalysis == 1:
     portdata = PV.Checkports(ports)
-if WriteOutTable == 1:
-    BigD = PV.DataFrameForAnalysis()
+#if WriteOutTable == 1:
+#    BigD = PV.DataFrameForAnalysis()
+if WorldOceanAnalysis == 1:
+    BigD = PV.PolygonAnalysis(unixlow,unixhigh)
 if Network == 1:
     route = PV.ShippingNetwork()
     

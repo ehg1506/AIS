@@ -24,6 +24,7 @@ import pandas as pd
 import sklearn.cluster as cluster
 import scipy.cluster.hierarchy as hcluster
 import loc_check as LC
+import itertools
 
 # create new figure, axes instances
 
@@ -61,9 +62,11 @@ def ExtractData(filepath,a,b,c,d,lowtime,hightime,maxspeed,minspeed,SegmentAnaly
     SQLstring = "select distinct unixtime,sog,latitude,longitude,userid,\
         nav_status from %s where longitude<= %s and latitude <= %s\
         and longitude >= %s and latitude >= %s and sog >= %s and \
-        sog <= %s and unixtime >= %s and unixtime <= %s %s" % ('PanamaxSample1',\
+        sog <= %s and unixtime >= %s and unixtime <= %s %s" % ('BigShips1',\
         str(a),str(b),str(c),str(d),str(minspeed),str(maxspeed),str(lowtime),\
         str(hightime),'')
+    
+    A = time.time()
     
     with conn:
         cur = conn.cursor()  
@@ -86,6 +89,9 @@ def ExtractData(filepath,a,b,c,d,lowtime,hightime,maxspeed,minspeed,SegmentAnaly
             navstat.append(Datastrip[5])
             
     cur.close()
+    
+    print('Database extraction time is: ' + str(time.time()-A) + ' s')
+    
     '''
     conn = sqlite3.connect(filepath)
     cur = conn.cursor()
@@ -110,7 +116,7 @@ def ExtractData(filepath,a,b,c,d,lowtime,hightime,maxspeed,minspeed,SegmentAnaly
                 useridDraught.append(draughtstrip[2])
     '''
     #return plotlat, plotlon
-
+'''
 def DataFrameForAnalysis():
     # Lager df for analyse            
     df = pandas.DataFrame({'Speed': speeds, 'MMSI': mmsi, 'Unixtime': timestep, \
@@ -118,7 +124,7 @@ def DataFrameForAnalysis():
     df['Date/Time'] = df['Unixtime'].apply(lambda x: \
                       datetime.fromtimestamp(x).strftime("%d/%m/%Y %H:%M:%S"))
     return df
-
+'''
 def DataClusterPorts():
     global clusterlat
     global clusterlon
@@ -190,232 +196,93 @@ def ShippingNetwork():
     return route           
                 
             
-def PolygonAnalysis():
-    polygons = LC.generate_polygons()
-    #LC.ocean_polygon(polygons)
-    
-    global number_of_vessel_monthly_atlantic 
+def PolygonAnalysis(lowtime,hightime):
+    # Creating DataFram for analytical easiness           
+    df = pandas.DataFrame({'Speed': speeds, 'MMSI': mmsi, 'Unixtime': timestep, \
+                             'Lat': plotlat, 'Lon': plotlon})
+    #df['Date/Time'] = df['Unixtime'].apply(lambda x: \
+    #                  datetime.fromtimestamp(x).strftime("%d/%m/%Y %H:%M:%S"))
 
-    #Polygons indexing:
-    # 0: Atlantic
-    AtlanticMMSI = list()
-    AtlanticSpeed = list()
-    AtlanticLat = list()
-    AtlanticLon = list()
-    AtlanticTime = list()
-    # 1: East Pacific
-    EastPacificMMSI = list()
-    EastPacificSpeed = list()
-    EastPacificLat  = list()
-    EastPacificLon = list()
-    EastPacficTime = list()
-    # 2: West Pacific
-    WestPacificMMSI = list()
-    WestPacificSpeed = list()
-    WestPacificLat = list()
-    WestPacificLon = list()
-    WestPacificTime = list()
-    # 3: Indian Ocean
-    IndianOceanMMSI = list()
-    IndianOceanSpeed = list()
-    IndianOceanLat = list()
-    IndianOceanLon = list()
-    IndianOceanTime = list()
-    # 4: Mediterranean
-    MediterraneanMMSI = list()
-    MediterraneanSpeed = list()
-    MediterraneanLat = list()
-    MediterraneanLon = list()
-    MediterraneanTime = list()
-    # 5: North Sea
-    NorthSeaMMSI = list()
-    NorthSeaSpeed = list()
-    NorthSeaLat = list()
-    NorthSeaLon = list()
-    NorthSeaTime = list()
-    # 6: SE Asia
-    SEAsiaMMSI = list()
-    SEAsiaSpeed = list()
-    SEAsiaLat = list()
-    SEAsiaLon = list()
-    SEAsiaTime = list()
-    # 7: Oceania
-    OceaniaMMSI = list()
-    OceaniaSpeed = list()
-    OceaniaLat = list()
-    OceaniaLon = list()
-    OceaniaTime = list()
+    polygons = LC.generate_polygons()
     
-    #Outside
-    MMSIOutsideZones = list()
-    LatOutsideZones = list()
-    LonOutsideZones = list()
+    #Creating empty column in the dataframe
+    df['Zone'] = pd.Series({'Zone': range(len(df['MMSI']))})
+
+    #Taking time:
+    A = time.time()
     
     for i in range(0,len(plotlat)):
         if LC.point_inside_polygon(plotlon[i],plotlat[i],polygons[0]):
-            AtlanticMMSI.append(mmsi[i])
-            AtlanticSpeed.append(speeds[i])
-            AtlanticLat.append(plotlat[i])
-            AtlanticLon.append(plotlon[i])
-            AtlanticTime.append(timestep[i])
+            df.set_value(i,'Zone','Atlantic')
         elif LC.point_inside_polygon(plotlon[i],plotlat[i],polygons[1]):
-            EastPacificMMSI.append(mmsi[i])
-            EastPacificSpeed.append(speeds[i])
-            EastPacificLat.append(plotlat[i])
-            EastPacificLon.append(plotlon[i])
-            EastPacficTime.append(timestep[i])
+            df.set_value(i,'Zone','East Pacific')
         elif LC.point_inside_polygon(plotlon[i],plotlat[i],polygons[2]):
-            WestPacificMMSI.append(mmsi[i])
-            WestPacificSpeed.append(speeds[i])
-            WestPacificLat.append(plotlat[i])
-            WestPacificLon.append(plotlon[i])
-            WestPacificTime.append(timestep[i])   
+            df.set_value(i,'Zone','West Pacific')
         elif LC.point_inside_polygon(plotlon[i],plotlat[i],polygons[3]):
-            IndianOceanMMSI.append(mmsi[i])
-            IndianOceanSpeed.append(speeds[i])
-            IndianOceanLat.append(plotlat[i])
-            IndianOceanLon.append(plotlon[i])
-            IndianOceanTime.append(timestep[i]) 
+            df.set_value(i,'Zone','Indian Ocean')
         elif LC.point_inside_polygon(plotlon[i],plotlat[i],polygons[4]):
-            MediterraneanMMSI.append(mmsi[i])
-            MediterraneanSpeed.append(speeds[i])
-            MediterraneanLat.append(plotlat[i])
-            MediterraneanLon.append(plotlon[i])
-            MediterraneanTime.append(timestep[i]) 
-        elif LC.point_inside_polygon(plotlon[i],plotlat[i],polygons[5]):  
-            NorthSeaMMSI.append(mmsi[i])
-            NorthSeaSpeed.append(speeds[i])
-            NorthSeaLat.append(plotlat[i])
-            NorthSeaLon.append(plotlon[i])
-            NorthSeaTime.append(timestep[i]) 
+            df.set_value(i,'Zone','Mediterranean')
+        elif LC.point_inside_polygon(plotlon[i],plotlat[i],polygons[5]):
+            df.set_value(i,'Zone','North Sea')    
         elif LC.point_inside_polygon(plotlon[i],plotlat[i],polygons[6]):
-            SEAsiaMMSI.append(mmsi[i])
-            SEAsiaSpeed.append(speeds[i])
-            SEAsiaLat.append(plotlat[i])
-            SEAsiaLon.append(plotlon[i])
-            SEAsiaTime.append(timestep[i]) 
-        elif LC.point_inside_polygon(plotlon[i],plotlat[i],polygons[7]): 
-            OceaniaMMSI.append(mmsi[i])
-            OceaniaSpeed.append(speeds[i])
-            OceaniaLat.append(plotlat[i])
-            OceaniaLon.append(plotlon[i])
-            OceaniaTime.append(timestep[i])
+            df.set_value(i,'Zone','SE Asia')
+        elif LC.point_inside_polygon(plotlon[i],plotlat[i],polygons[7]):
+            df.set_value(i,'Zone','Oceania')
         else: 
-            MMSIOutsideZones.append(mmsi[i])
-            LatOutsideZones.append(plotlat[i])
-            LonOutsideZones.append(plotlon[i])
+            df.set_value(i,'Zone','Outside Zones')
 
-    #Filters unique vessels
-    Unique_vessels_Atlantic= list()
-    Unique_vessels_EastPacific = list()
-    Unique_vessels_WestPacific = list()
-    Unique_vessels_IndianOcean = list()
-    Unique_vessels_Mediterranean = list()
-    Unique_vessels_NorthSea = list()
-    Unique_vessels_SEAsia = list()
-    Unique_vessels_Oceania = list()
+    print('Polygon iteration time is: ' + str(time.time()-A) + ' s')      
     
-
-    #Finding unique vessels for the whole period, function in Loccheck
-    LC.find_unique_vessels(AtlanticMMSI,Unique_vessels_Atlantic)
-    LC.find_unique_vessels(EastPacificMMSI,Unique_vessels_EastPacific)
-    LC.find_unique_vessels(WestPacificMMSI,Unique_vessels_WestPacific)
-    LC.find_unique_vessels(IndianOceanMMSI,Unique_vessels_IndianOcean)
-    LC.find_unique_vessels(MediterraneanMMSI,Unique_vessels_Mediterranean)
-    LC.find_unique_vessels(NorthSeaMMSI,Unique_vessels_NorthSea)
-    LC.find_unique_vessels(SEAsiaMMSI,Unique_vessels_SEAsia)
-    LC.find_unique_vessels(OceaniaMMSI,Unique_vessels_Oceania)
-
-    print(len(Unique_vessels_Atlantic))
+    Atlantic = df[df['Zone'] == 'Atlantic']
+    EastPacific = df[df['Zone'] == 'East Pacific']
+    WestPacific = df[df['Zone'] == 'West Pacific']
+    IndianOcean = df[df['Zone'] == 'Indian Ocean']
+    Mediterranean = df[df['Zone'] == 'Mediterranean']
+    NorthSea = df[df['Zone'] == 'North Sea']
+    SEAsia = df[df['Zone'] == 'SE Asia']
+    Oceania = df[df['Zone'] == 'Oceania']    
     
-    #Finding the timeintervalls for all the different vessels, function in LocCheck
-    # Denne må endres til en generisk timestamp
-    Timestamps_Atlantic = LC.get_timevector(AtlanticTime)
-    Timestamps_EastPacific = LC.get_timevector(EastPacficTime)
-    Timestamps_WestPacfic = LC.get_timevector(WestPacificTime)
-    Timestamps_IndianOcean = LC.get_timevector(IndianOceanTime)
-    Timestamps_Medittarnean = LC.get_timevector(MediterraneanTime)
-    Timestamps_NorthSea = LC.get_timevector(NorthSeaTime)
-    Timestamps_SEAsia = LC.get_timevector(SEAsiaTime)
-    Timestamps_Oceania = LC.get_timevector(OceaniaTime)
-    #Hardcoding in the time here
-    mintime = 1325376000
-    maxtime = 1420070400
-    minmaxtime = (1325376000,1420070400)
+    minmaxtime = (lowtime,hightime)
     
     Timestamps = LC.get_timevector(minmaxtime)
+    #print(Timestamps)
     
-    print(Timestamps_Atlantic)
-    print(Timestamps_EastPacific)
-    print(Timestamps_WestPacfic)
-    print(Timestamps_IndianOcean)
-    print(Timestamps_Medittarnean)
-    print(Timestamps_SEAsia)
-    print(Timestamps_Oceania)
+    #For plotting:
+    dates = [datetime.fromtimestamp(u).strftime('%d/%m/%Y') for u in Timestamps]
+    #print(dates)
+    dates.pop(len(dates)-1)
     
-    #Generating monthly lists (will be a list of lists)
-    number_of_messages_monthly_Atlantic = [[] for i in range(0,len(Timestamps))]
-    number_of_messages_monthly_EastPacific = [[] for i in range(0,len(Timestamps))]
-    number_of_messages_monthly_WestPacific = [[] for i in range(0,len(Timestamps))]
-    number_of_messages_monthly_IndianOcean = [[] for i in range(0,len(Timestamps))]
-    number_of_messages_monthly_Medittarnean = [[] for i in range(0,len(Timestamps))]
-    number_of_messages_monthly_NorthSea = [[] for i in range(0,len(Timestamps))]
-    number_of_messages_monthly_SEAsia = [[] for i in range(0,len(Timestamps))]
-    number_of_messages_monthly_Oceania = [[] for i in range(0,len(Timestamps))] 
+    #print(Atlantic[Atlantic['Unixtime']<Timestamps[1]]['MMSI'].nunique())
+    #print(Atlantic[(Atlantic['Unixtime']>=Timestamps[1]) & (Atlantic['Unixtime']<Timestamps[2])]['MMSI'].nunique())
+    
     #Filter data for monthly basis
-    LC.monthly_filter(AtlanticTime,AtlanticMMSI,Timestamps,number_of_messages_monthly_Atlantic)
-    LC.monthly_filter(EastPacficTime,EastPacificMMSI,Timestamps,number_of_messages_monthly_EastPacific)
-    LC.monthly_filter(WestPacificTime,WestPacificMMSI,Timestamps,number_of_messages_monthly_WestPacific)
-    LC.monthly_filter(IndianOceanTime,IndianOceanMMSI,Timestamps,number_of_messages_monthly_IndianOcean)
-    LC.monthly_filter(MediterraneanTime,MediterraneanMMSI,Timestamps,number_of_messages_monthly_Medittarnean)
-    LC.monthly_filter(NorthSeaTime,NorthSeaMMSI,Timestamps,number_of_messages_monthly_NorthSea)
-    LC.monthly_filter(SEAsiaTime,SEAsiaMMSI,Timestamps,number_of_messages_monthly_SEAsia)
-    LC.monthly_filter(OceaniaTime,OceaniaMMSI,Timestamps,number_of_messages_monthly_Oceania)
-    print(len((number_of_messages_monthly_Atlantic[0])))
-    #Make lists containing the number of unqiue vessel found in a time interval of one month
-#    number_of_messages_monthly_Atlantic = number_of_messages_monthly_Atlantic[:-1]
-#    number_of_messages_monthly_EastPacific = number_of_messages_monthly_EastPacific[:-1]
-#    number_of_messages_monthly_WestPacific = number_of_messages_monthly_WestPacific[:-1]
-#    number_of_messages_monthly_IndianOcean = number_of_messages_monthly_IndianOcean[:-1]
-#    number_of_messages_monthly_Medittarnean = number_of_messages_monthly_IndianOcean[:-1]
-#    number_of_messages_monthly_NorthSea = number_of_messages_monthly_NorthSea[:-1]
-#    number_of_messages_monthly_SEAsia = number_of_messages_monthly_SEAsia[:-1]
-#    number_of_messages_monthly_Oceania = number_of_messages_monthly_Oceania[:-1]
-    #Generating list for each polygon
-    unique_vessels_monthly_Atlantic = [[] for i in range(0,len(number_of_messages_monthly_Atlantic))]
-    unique_vessels_monthly_EastPacific = [[] for i in range(0,len(number_of_messages_monthly_EastPacific))]
-    unique_vessels_monthly_WestPacific = [[] for i in range(0,len(number_of_messages_monthly_WestPacific))]
-    unique_vessels_monthly_IndianOcean = [[] for i in range(0,len(number_of_messages_monthly_IndianOcean))]
-    unique_vessels_monthly_Medittarnean = [[] for i in range(0,len(number_of_messages_monthly_Medittarnean))]
-    unique_vessels_monthly_NorthSea = [[] for i in range(0,len(number_of_messages_monthly_NorthSea))]
-    unique_vessels_monthly_SEAsia = [[] for i in range(0,len(number_of_messages_monthly_SEAsia))]
-    unique_vessels_monthly_Oceania = [[] for i in range(0,len(number_of_messages_monthly_Oceania))]
-    #Filter unique vessels
-    unique_vessels_monthly_Atlantic = LC.unique_vessels_monthly(number_of_messages_monthly_Atlantic,unique_vessels_monthly_Atlantic)
-    unique_vessels_monthly_EastPacific = LC.unique_vessels_monthly(number_of_messages_monthly_EastPacific,unique_vessels_monthly_EastPacific)
-    unique_vessels_monthly_WestPacific = LC.unique_vessels_monthly(number_of_messages_monthly_WestPacific,unique_vessels_monthly_WestPacific)
-    unique_vessels_monthly_IndianOcean = LC.unique_vessels_monthly(number_of_messages_monthly_IndianOcean,unique_vessels_monthly_IndianOcean)
-    unique_vessels_monthly_Medittarnean = LC.unique_vessels_monthly(number_of_messages_monthly_Medittarnean,unique_vessels_monthly_Medittarnean)
-    unique_vessels_monthly_NorthSea = LC.unique_vessels_monthly(number_of_messages_monthly_NorthSea,unique_vessels_monthly_NorthSea)
-    unique_vessels_monthly_SEAsia = LC.unique_vessels_monthly(number_of_messages_monthly_SEAsia,unique_vessels_monthly_SEAsia)
-    unique_vessels_monthly_Oceania = LC.unique_vessels_monthly(number_of_messages_monthly_Oceania,unique_vessels_monthly_Oceania)
-    print(unique_vessels_monthly_Atlantic)
-    print(unique_vessels_monthly_EastPacific)
-    print(unique_vessels_monthly_WestPacific)
-    print(unique_vessels_monthly_IndianOcean)
-    print(unique_vessels_monthly_Medittarnean)
-    print(unique_vessels_monthly_NorthSea)
-    print(unique_vessels_monthly_SEAsia)
-    print(unique_vessels_monthly_Oceania)
-    print(len(unique_vessels_monthly_Atlantic))
-    print(len(unique_vessels_monthly_IndianOcean))
-    print(len(unique_vessels_monthly_NorthSea))
-    print(len(unique_vessels_monthly_SEAsia))
-    #Plotting the vessel distribution
-    timeperiod = list(range(0,len(unique_vessels_monthly_Atlantic)))
-    fig, ax = plt.subplots()
-    plt.xlabel ('Timeperiod')
-    plt.ylabel('Vessel distribution over time')
+    number_of_messages_monthly_Atlantic = LC.monthly_filter(np.array(Atlantic['Unixtime']),np.array(Atlantic['MMSI']),Timestamps)
+    number_of_messages_monthly_EastPacific = LC.monthly_filter(np.array(EastPacific['Unixtime']),np.array(EastPacific['MMSI']),Timestamps)
+    number_of_messages_monthly_WestPacific = LC.monthly_filter(np.array(WestPacific['Unixtime']),np.array(WestPacific['MMSI']),Timestamps)
+    number_of_messages_monthly_IndianOcean = LC.monthly_filter(np.array(IndianOcean['Unixtime']),np.array(IndianOcean['MMSI']),Timestamps)
+    number_of_messages_monthly_Medittarnean= LC.monthly_filter(np.array(Mediterranean['Unixtime']),np.array(Mediterranean['MMSI']),Timestamps)
+    number_of_messages_monthly_NorthSea = LC.monthly_filter(np.array(NorthSea['Unixtime']),np.array(NorthSea['MMSI']),Timestamps)
+    number_of_messages_monthly_SEAsia = LC.monthly_filter(np.array(SEAsia['Unixtime']),np.array(SEAsia['MMSI']),Timestamps)
+    number_of_messages_monthly_Oceania = LC.monthly_filter(np.array(Oceania['Unixtime']),np.array(Oceania['MMSI']),Timestamps)
+    number_of_messages_monthly_World = LC.monthly_filter(np.array(df['Unixtime']),np.array(df['MMSI']),Timestamps)
+
+    #Filter unique vessels: list av list av mmsi per mnd 
+    unique_vessels_monthly_Atlantic = [pd.Series(row[1]).nunique() for row in pd.Series(number_of_messages_monthly_Atlantic).iteritems()]
+    unique_vessels_monthly_EastPacific = [pd.Series(row[1]).nunique() for row in pd.Series(number_of_messages_monthly_EastPacific).iteritems()]
+    unique_vessels_monthly_WestPacific = [pd.Series(row[1]).nunique() for row in pd.Series(number_of_messages_monthly_WestPacific).iteritems()]
+    unique_vessels_monthly_IndianOcean = [pd.Series(row[1]).nunique() for row in pd.Series(number_of_messages_monthly_IndianOcean).iteritems()]
+    unique_vessels_monthly_Medittarnean = [pd.Series(row[1]).nunique() for row in pd.Series(number_of_messages_monthly_Medittarnean).iteritems()]
+    unique_vessels_monthly_NorthSea = [pd.Series(row[1]).nunique() for row in pd.Series(number_of_messages_monthly_NorthSea).iteritems()]
+    unique_vessels_monthly_SEAsia = [pd.Series(row[1]).nunique() for row in pd.Series(number_of_messages_monthly_SEAsia).iteritems()]
+    unique_vessels_monthly_Oceania = [pd.Series(row[1]).nunique() for row in pd.Series(number_of_messages_monthly_Oceania).iteritems()]
+    unique_vessels_monthly_World = [pd.Series(row[1]).nunique() for row in pd.Series(number_of_messages_monthly_World).iteritems()]
+    
+    #Plotting the vessel distribution    
+    timeperiod = list(range(0,(len(Timestamps)-1)))
+    fig, ax = plt.subplots(figsize=(15,6))
+    plt.xlabel ('Months from %s' % str(dates[0]))
+    plt.ylabel('Vessels in zone')
+    #plt.xticks(timeperiod, dates)
     ax.plot(timeperiod,unique_vessels_monthly_Atlantic,label = 'Atlantic')
     ax.plot(timeperiod,unique_vessels_monthly_EastPacific,label = 'East Pacific')
     ax.plot(timeperiod,unique_vessels_monthly_WestPacific, label = 'West Pacific')
@@ -424,68 +291,23 @@ def PolygonAnalysis():
     ax.plot(timeperiod,unique_vessels_monthly_NorthSea,label = 'North Sea')
     ax.plot(timeperiod,unique_vessels_monthly_SEAsia, label = 'South East Asia')
     ax.plot(timeperiod,unique_vessels_monthly_Oceania, label = 'Oceania')
-    legend = ax.legend(loc ='upper right',shadow = True)
+    ax.plot(timeperiod,unique_vessels_monthly_World, label = 'World')
+    
+    #Placeing the legend outside the plot box:
+    legend = ax.legend(bbox_to_anchor=(0,1.02,1,0.2), loc="lower left",
+                mode="expand", borderaxespad=0, ncol=3)
+    
     frame = legend.get_frame()
     frame.set_facecolor('0.90')
-    for label in legend.get_texts():
-        label.set_fontsize('small')
     for label in legend.get_lines():
         label.set_linewidth(1)
  #   plt.plot(x1,y1,x2,y2,x3,y3)
-    plt.axis([0,len(timeperiod),0,100])
+    plt.axis([0,(len(Timestamps)-1),0,210])
     plt.show()
+    print(unique_vessels_monthly_World)
     
-    """
-    fig, ax = plt.subplots()
-    ax.plot(a, c, 'k--', label='Model length')
-    ax.plot(a, d, 'k:', label='Data length')
-    ax.plot(a, c+d, 'k', label='Total message length')
-
-    # Now add the legend with some customizations.
-    legend = ax.legend(loc='upper center', shadow=True)
-
-    # The frame is matplotlib.patches.Rectangle instance surrounding the legend.
-    frame = legend.get_frame()
-    frame.set_facecolor('0.90')
-    
-    # Set the fontsize
-    for label in legend.get_texts():
-    label.set_fontsize('large')
-
-    for label in legend.get_lines():
-    label.set_linewidth(1.5)  # the legend line width
-    plt.show()
-    mintime = min(AtlanticTime)
-    maxtime = max(AtlanticTime)
-    deltatime = maxtime - mintime
-    nom = LC.get_number_of_months(deltatime) #nom = number of months
-    increment = deltatime/nom
-    Timestamps = np.arange(mintime,maxtime,increment)
-    number_of_messages_monthly_atlantic = [[] for i in range(0,len(Timestamps))]
-    #Filter data to get it on a monthly basis 
-    for i in range(0,len(AtlanticTime)):
-        for j in range(1,len(Timestamps)):
-            if j == 0:
-                if AtlanticTime[i] < Timestamps[j+1]:
-                    number_of_messages_monthly_atlantic[j].append(AtlanticTime[i])
- #           if j > 0 and j < len(Timestamps):        
- #               if AtlanticTime[i] > Timestamps[j-1] and AtlanticTime[i] < Timestamps[j]:
- #                   number_of_messages_monthly_atlantic[j].append(AtlanticMMSI[i])
-            else:
-                if AtlanticTime[i] > Timestamps[j-1] and AtlanticTime[i] < Timestamps[j]:
-                    number_of_messages_monthly_atlantic[j].append(AtlanticMMSI[i])
-
-    #The intervalltime will be given as an interval, hence there will be 11 elemnts for 12 months
-    print(number_of_messages_monthly_atlantic)
-    #number_of_messages_monthly_atlantic = number_of_messages_monthly_atlantic[:-1]
-    unique_vessels_monthly_atlantic = [[] for i in range(0,len(number_of_messages_monthly_atlantic))]
-    #Finding the unique number of messages per month     
-    for i in range(0,len(number_of_messages_monthly_atlantic)):
-        unique_vessels_monthly_atlantic[i] = len(set(number_of_messages_monthly_atlantic[i]))
-    print(unique_vessels_monthly_atlantic)
-    timeperiod = list(range(0,len(unique_vessels_monthly_atlantic)))
-    print(timeperiod)
-    """
+    return df
+   
     # Statistical Data
 #   AtlanticMean = st.mean(AtlanticSpeed)
 #    AtlanticVar = st.variance(AtlanticSpeed)

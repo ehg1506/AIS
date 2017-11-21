@@ -170,16 +170,6 @@ def plot_inside_polygons(lon,lat):
     x,y = m(lon,lat)
     m.scatter(x,y,0.01,marker='o',c='blue')
     plt.show()
-    
-def get_number_of_months(u):
-    d = datetime.datetime.fromtimestamp(u)
-    return d.month
-
-def find_unique_vessels(vessellist,unique_vessels):
-    for i in range(0,len(vessellist)):
-        if vessellist[i] not in unique_vessels:
-            unique_vessels.append(vessellist[i])
-    return unique_vessels
 
 def get_timevector(Timelist):
     mintime = min(Timelist)
@@ -187,39 +177,23 @@ def get_timevector(Timelist):
     deltatime = maxtime - mintime
     d = datetime.datetime.fromtimestamp(deltatime)
     months_from_years = 12*(d.year - 1970)
-    months_left = d.month
+    months_left = d.month-1 
     months = months_left + months_from_years
     increment = deltatime/months
     Timestamp = np.arange(mintime,maxtime,increment)
+    #Timestamp = np.append(Timestamp, maxtime)     int(round(x))
     return Timestamp
 
-def get_generic_timevector(mintime,maxtime):
-    deltatime = maxtime - mintime
-    d = datetime.datetime.fromtimestamp(deltatime)
-    months_from_years = 12*(d.year - 1970)
-    months_left = d.month
-    months = months_left + months_from_years
-    increment = deltatime/months
-    Timestamp = np.arange(mintime,maxtime,increment)
-    return print(Timestamp)
-
-def monthly_filter(timelist,mmsi,timestamps,monthly_list):
-    for i in range(0,len(timelist)):
-        for j in range(1,len(timestamps)):
-            if j== 0:
-                if timelist[i] < timestamps[j+1]:
-                    monthly_list[j].append(mmsi[i])
-            else:
-                if timelist[i] > timestamps[j-1] and timelist[i] < timestamps[j]:
-                    monthly_list[j].append(mmsi[i])
-    return monthly_list
+def monthly_filter(timelist,mmsi,timestamps):
+    monthly_list = [[] for i in range(0,(len(timestamps)-1))]
     
-def unique_vessels_monthly(messages_monthly,unique_vessel_monthly):
-    for i in range(0,len(messages_monthly)):
-        if messages_monthly[i] not in unique_vessel_monthly[i]:
-            unique_vessel_monthly[i] = len(set(messages_monthly[i]))
-    return unique_vessel_monthly
-
+    for i in range(0,len(timelist)):
+        for j in range(0,len(monthly_list)):
+            if timelist[i] >= timestamps[j] and timelist[i] < timestamps[j+1]:
+                monthly_list[j].append(mmsi[i])
+                   
+    #monthly_list.pop(0) #Remove first values which is zero 
+    return monthly_list
 
 
 #minmaxtime = (1325376000,1420070400)
