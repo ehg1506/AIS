@@ -170,13 +170,80 @@ def plot_inside_polygons(lon,lat):
     x,y = m(lon,lat)
     m.scatter(x,y,0.01,marker='o',c='blue')
     plt.show()
+
+def get_timevector(Timelist):
+    mintime = min(Timelist)
+    maxtime = max(Timelist)
+    deltatime = maxtime - mintime
+    d = datetime.datetime.fromtimestamp(deltatime)
+    months_from_years = 12*(d.year - 1970)
+    months_left = d.month-1 
+    months = months_left + months_from_years
+    increment = deltatime/months
+    Timestamp = np.arange(mintime,maxtime,increment)
+    #Timestamp = np.append(Timestamp, maxtime)     int(round(x))
+    return Timestamp
+
+def monthly_filter(timelist,mmsi,timestamps):
+    monthly_list = [[] for i in range(0,(len(timestamps)-1))]
     
-def get_number_of_months(u):
-    d = datetime.datetime.fromtimestamp(u)
-    return d.month
+    for i in range(0,len(timelist)):
+        for j in range(0,len(monthly_list)):
+            if timelist[i] >= timestamps[j] and timelist[i] < timestamps[j+1]:
+                monthly_list[j].append(mmsi[i])
+                   
+    #monthly_list.pop(0) #Remove first values which is zero 
+    return monthly_list
+
+
+#minmaxtime = (1325376000,1420070400)
+
+#timelist2 = get_timevector(timelist1)
+#print(timelist2)
+
+"""            
+    
+Timestamps = np.arange(mintime,maxtime,increment)
+    
+    
+    
+for i in range(0,len(number_of_messages_monthly_atlantic)):
+    unique_vessels_monthly_atlantic[i] = len(set(number_of_messages_monthly_atlantic[i]))
+print(unique_vessels_monthly_atlantic)
+    
+    
+    number_of_messages_monthly_atlantic = [[] for i in range(0,len(Timestamps))]
+    #Filter data to get it on a monthly basis 
+    for i in range(0,len(AtlanticTime)):
+        for j in range(0,len(Timestamps)):
+            if j == 0:
+                if AtlanticTime[i] < Timestamps[j+1]:
+                    number_of_messages_monthly_atlantic[j].append(AtlanticTime[i])
+            if j > 0 and j < len(Timestamps):        
+                if AtlanticTime[i] > Timestamps[j-1] and AtlanticTime[i] < Timestamps[j]:
+                    number_of_messages_monthly_atlantic[j].append(AtlanticMMSI[i])
+            else:
+                if AtlanticTime[i] > Timestamps[j-1] and AtlanticTime[i] < Timestamps[j]:
+                    number_of_messages_monthly_atlantic[j].append(AtlanticMMSI[i])
+
+    #The intervalltime will be given as an interval, hence there will be 11 elemnts for 12 months
+    number_of_messages_monthly_atlantic = number_of_messages_monthly_atlantic[:-1]
+
+"""    
+"""
+    #Make on list containing the number of unqiue vessel found in a time interval of one month
+    mintime = min(AtlanticTime)
+    maxtime = max(AtlanticTime)
+    deltatime = maxtime - mintime
+    nom = LC.get_number_of_months(deltatime) #nom = number of months
+    increment = deltatime/nom
+    
+    #List for timestamps
+    Timestamps = np.arange(mintime,maxtime,increment)
+"""
+          
 #Running
 #extract_geodata(1,'/Users/erikgrundt/Desktop/ContainerFleet.db') 
 #generate_polygons()
 #ocean_polygon(polygons)
 #print(point_inside_polygon(0,0,polygons[0]))
-#plot_inside_polygons(-40,50)
