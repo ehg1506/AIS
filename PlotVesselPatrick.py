@@ -24,7 +24,8 @@ import pandas as pd
 import sklearn.cluster as cluster
 import scipy.cluster.hierarchy as hcluster
 import loc_check as LC
-import itertools
+import networkx as nx
+from itertools import cycle
 
 # create new figure, axes instances
 
@@ -52,14 +53,18 @@ def ExtractData(filepath,a,b,c,d,lowtime,hightime,maxspeed,minspeed,SegmentAnaly
     geospeed = list()
     mmsi = list()
     navstat = list()
+    
+    draughttime = list()
+    draught = list()
+    useridDraught = list()
 
     conn = sqlite3.connect(filepath)
     cur = conn.cursor()
     
-    # For nav-igation status, insert: 
+    # For nav-igation status, insert in '': 
     #portstatus = 'and (nav_status==1 or nav_status ==5)'
     
-    SQLstring = "select distinct unixtime,sog,latitude,longitude,userid,\
+    SQLstring1 = "select distinct unixtime,sog,latitude,longitude,userid,\
         nav_status from %s where longitude<= %s and latitude <= %s\
         and longitude >= %s and latitude >= %s and sog >= %s and \
         sog <= %s and unixtime >= %s and unixtime <= %s %s" % ('BigShips1',\
@@ -67,18 +72,14 @@ def ExtractData(filepath,a,b,c,d,lowtime,hightime,maxspeed,minspeed,SegmentAnaly
         str(hightime),'')
     
     A = time.time()
-    
     with conn:
         cur = conn.cursor()  
         if SegmentAnalysis == 1:
-            cur.execute(SQLstring)
+            cur.execute(SQLstring1)
         else:
             cur.execute("SELECT unixtime,sog,latitude,longitude,userid FROM MessageType1 ORDER BY UNIXTIME ASC")
         VesselData = cur.fetchall()
         
-        #####################################################
-        # THE FOLLOWING PARTS FILTERS ON SPEED AND POSITION #
-        #####################################################
         for i in range(0,len(VesselData)):
             Datastrip = VesselData[i]
             timestep.append(Datastrip[0])
@@ -86,36 +87,35 @@ def ExtractData(filepath,a,b,c,d,lowtime,hightime,maxspeed,minspeed,SegmentAnaly
             plotlat.append(Datastrip[2])
             plotlon.append(Datastrip[3])        
             mmsi.append(Datastrip[4])
-            navstat.append(Datastrip[5])
-            
+            navstat.append(Datastrip[5])      
+    
     cur.close()
     
-    print('Database extraction time is: ' + str(time.time()-A) + ' s')
-    
-    '''
     conn = sqlite3.connect(filepath)
     cur = conn.cursor()
+    
+    SQLstring2 = "select distinct unixtime,draught,userid from %s where \
+        unixtime >= %s and unixtime <= %s" % ('BigShips5',str(lowtime),\
+        str(hightime))
+    
     with conn:
         cur = conn.cursor()
         if SegmentAnalysis == 1:
-            cur.execute("select unixtime,draught,userid from BigShips5 order by userid, unixtime asc")
+            cur.execute(SQLstring2)
         else:
             cur.execute("SELECT unixtime,draught,userid FROM MessageType5 ORDER BY UNIXTIME ASC")
         draughtdata = cur.fetchall()
-        draughttime = list()
-        draught = list()
-        useridDraught = list()
-        
+         
     for i in range(0,len(draughtdata)):
         draughtstrip = draughtdata[i]
-        if Speed < 30 and lat <= maxLat and lat >= minLat \
-            and lon >= minLon and lon <= maxLon and untime > lowtime and untime < hightime:
-            if draughtstrip[1]/10 > 5:
-                draughttime.append(draughtstrip[0])
-                draught.append(draughtstrip[1]/10)
-                useridDraught.append(draughtstrip[2])
-    '''
-    #return plotlat, plotlon
+        if draughtstrip[1]/10 > 5:
+            draughttime.append(draughtstrip[0])
+            draught.append(draughtstrip[1]/10)
+            useridDraught.append(draughtstrip[2])
+            
+    print('Database extraction time is: ' + str(time.time()-A) + ' s')
+    
+    return plotlon, plotlat
 '''
 def DataFrameForAnalysis():
     # Lager df for analyse            
@@ -125,27 +125,184 @@ def DataFrameForAnalysis():
                       datetime.fromtimestamp(x).strftime("%d/%m/%Y %H:%M:%S"))
     return df
 '''
-def DataClusterPorts():
+
+def PortsPlot(lat,lon,clat,clon):
+    minlon = max(-180,min(lon)-5) #-10
+    minlat = max(-90,min(lat)-5) #-10
+    maxlon = min(180,max(lon)+5) #+10
+    maxlat = min(90,max(lat)+5) #+10
+    lat0 = (maxlat+minlat)/2
+    lon0 = (maxlon+minlon)/2
+    lat1 = (maxlat+minlat)/2-20
+
+    fig=plt.figure(figsize=(18,18))
+    fig.add_axes([0.1,0.1,0.8,0.8])
+    m = Basemap(llcrnrlon=minlon,llcrnrlat=minlat,urcrnrlon=maxlon,urcrnrlat=maxlat,\
+            rsphere=(6378137.00,6356752.3142),\
+            resolution='l',projection='cyl',\
+            lat_0=lat0,lon_0=lon0,lat_ts = lat1)
+
+    m.drawmapboundary(fill_color='black')
+    m.fillcontinents(color='dimgray',lake_color='black',zorder=0) #,zorder=0
+    x, y = m(lon,lat) 
+    #Ships:
+    m.scatter(x,y,10,marker='o',c='yellow')
+    #m.drawcoastlines()
+    
+    #Ports:
+    m.scatter(clat,clon,50,marker='x',c='magenta')
+    
+    m.drawparallels(np.arange(-90,90,20),labels=[1,1,0,1])       
+    m.drawmeridians(np.arange(-180,180,20),labels=[1,1,0,1])
+    plt.savefig('/Users/PatrickAndreNaess/Desktop/PyPlots/current_plot.eps',\
+                format='eps', dpi=1000)
+   
+
+def ClusterPorts():
     global clusterlat
     global clusterlon
-    global portnumber
-    global Hcluster
-    global k
+    global n_clusters_
+    
     points = np.stack((plotlon,plotlat),axis=-1)
     N = len(points)
     
-    #Cluster with a Hierarchical clustering algorithm to get k:
-    thresh = 1
-    Hcluster = hcluster.fclusterdata(points, thresh, criterion="distance")
-    portnumber = pd.Series(Hcluster)
-    k = portnumber.nunique()
-    print('Found ' + str(k) + ' ports, from ' + str(N) + ' messages.')
-    #Clustering with K-means algorithm:
-    k_means = cluster.KMeans(n_clusters = k).fit(points).cluster_centers_
-    clusterlat = k_means[:,0]
-    clusterlon = k_means[:,1]
+    # 1 = Hierarchical clustering algorithm
+    # 2 = Affinity propagation clustering algorithm
+    # 3 = Mean-shift clustering algorithm
+    # 4 = K-means clustering based on number of cluster found with # 1
     
-    return clusterlat,clusterlon,Hcluster
+    CLUSTER = 3
+    
+    if (CLUSTER == 1) or (CLUSTER == 4):
+        #Cluster with a Hierarchical clustering algorithm to get k:
+        thresh = 2
+        labelsHi = hcluster.fclusterdata(points, thresh, criterion="distance")
+        n_clusters_ = pd.Series(labelsHi).nunique()
+        
+        print('Estimated number of clusters: ' + str(n_clusters_) + ' ports, from ' + \
+              str(N) + ' messages.')     
+        
+        # calculate full dendrogram
+        plt.figure(figsize=(18,6))
+    
+        # generate the linkage matrix
+        Z = hcluster.linkage(points, 'ward')
+
+        plt.title('Hierarchical Clustering Dendrogram (truncated)')
+        plt.xlabel('sample index')
+        plt.ylabel('distance')
+        hcluster.dendrogram(
+            Z,
+            truncate_mode='lastp',  # show only the last p merged clusters
+            p=12,  # show only the last p merged clusters
+            show_leaf_counts=False,  # otherwise numbers in brackets are counts
+            leaf_rotation=90.,
+            leaf_font_size=12.,
+            show_contracted=True,  # to get a distribution impression in truncated branches
+            )
+        plt.show()
+        
+        
+        if CLUSTER == 4:
+            #Clustering with K-means algorithm:
+            km = cluster.KMeans(n_clusters = n_clusters_).fit(points)
+            cluster_centers = km.cluster_centers_
+            labels = km.labels_
+            
+            clusterlat = cluster_centers[:,0]
+            clusterlon = cluster_centers[:,1]
+            PortsPlot(plotlat,plotlon,clusterlat,clusterlon)
+        
+            # Plot result           
+            fig, ax = plt.subplots(figsize=(18,6))
+
+            colors = cycle('bgrcmykbgrcmykbgrcmykbgrcmyk')
+            for i, col in zip(range(n_clusters_), colors):
+                my_members = labels == i
+                cluster_center = cluster_centers[i]
+                plt.plot(points[my_members, 0], points[my_members, 1], col + '.')
+                plt.plot(cluster_center[0], cluster_center[1], 'o', markerfacecolor=col,
+                         markeredgecolor='k', markersize=8)
+            plt.title('Estimated number of clusters: %d (K-means)' % n_clusters_)
+            plt.show()
+            labels = labels+1###############################################################
+        else:
+            clusterlat = list()
+            clusterlon = list()
+            labels = labelsHi
+            labels_unique = np.unique(labels)
+            data = pandas.DataFrame({'lat': plotlat, 'lon': plotlon, 'clust': labels})
+            for c in labels_unique:
+                lat = data[data['clust']==c]['lat'].tolist()
+                lon = data[data['clust']==c]['lon'].tolist()
+                p = np.stack((lon,lat),axis=-1)
+                cl = LC.centeroidnp(p)
+                clusterlat = np.append(clusterlat,cl[0])
+                clusterlon = np.append(clusterlon,cl[1])  
+            PortsPlot(plotlat,plotlon,clusterlat,clusterlon)
+        
+    elif CLUSTER == 2:
+        #Affinity propagation clustering: STATE OF THE ART
+        af = cluster.AffinityPropagation(preference=-50).fit(points)
+        cluster_centers_indices = af.cluster_centers_indices_
+        labels = af.labels_
+        
+        n_clusters_ = len(cluster_centers_indices)
+        
+        print('Estimated number of clusters: ' + str(n_clusters_) + \
+              ' ports, from ' + str(N) + ' messages.')
+        
+        # Plot result        
+        fig, ax = plt.subplots(figsize=(18,6))
+        
+        colors = cycle('bgrcmykbgrcmykbgrcmykbgrcmyk')
+        for i, col in zip(range(n_clusters_), colors):
+            class_members = labels == i
+            cluster_center = points[cluster_centers_indices[i]]
+            plt.plot(points[class_members, 0], points[class_members, 1], col + '.')
+            plt.plot(cluster_center[0], cluster_center[1], 'o', markerfacecolor=col,
+                     markeredgecolor='k', markersize=10)
+            for x in points[class_members]:
+                plt.plot([cluster_center[0], x[0]], [cluster_center[1], x[1]], col)
+                
+        plt.title('Estimated number of clusters: %d (Affinity propagation)' % n_clusters_)
+        plt.show()
+        labels = labels+1###############################################################
+        
+    elif CLUSTER == 3:
+        #Mean-shift clustering algorithm
+        # The following bandwidth can be automatically detected using
+        #bandwidth = cluster.estimate_bandwidth(points, quantile=0.2, n_samples=500)
+        bandwidth = 1.5
+        
+        ms = cluster.MeanShift(bandwidth=bandwidth, bin_seeding=True).fit(points)
+        cluster_centers = ms.cluster_centers_
+        labels = ms.labels_
+        labels_unique = np.unique(labels)
+        n_clusters_ = len(labels_unique)
+
+        print('Estimated number of clusters: ' + str(n_clusters_) + \
+              ' ports, from ' + str(N) + ' messages.')
+
+        clusterlat = cluster_centers[:,0]
+        clusterlon = cluster_centers[:,1]
+        PortsPlot(plotlat,plotlon,clusterlat,clusterlon)
+
+        # Plot result    
+        fig, ax = plt.subplots(figsize=(18,6))
+        
+        colors = cycle('bgrcmykbgrcmykbgrcmykbgrcmyk')
+        for i, col in zip(range(n_clusters_), colors):
+            my_members = labels == i
+            cluster_center = cluster_centers[i]
+            plt.plot(points[my_members, 0], points[my_members, 1], col + '.')
+            plt.plot(cluster_center[0], cluster_center[1], 'o', markerfacecolor=col,
+                     markeredgecolor='k', markersize=10)
+        plt.title('Estimated number of clusters: %d (Mean-shift)' % n_clusters_)
+        plt.show()
+        labels = labels+1###############################################################
+    
+    return clusterlat,clusterlon,labels
     
     
 def Checkports(file):
@@ -158,41 +315,93 @@ def Checkports(file):
     portdata.drop(['Draft','D_Region','Draft','CostPerFULL','CostPerFULLTrnsf', \
                    'PortCallCostFixed','PortCallCostPerFFE'], axis=1, inplace=True)    
     
+    tresh = 2
     for i in range(0,len(clusterlat)):   
         for index, row in portdata.iterrows():
-            if clusterlat[i] < (row['Latitude']+1) and \
-               clusterlat[i] > (row['Latitude']-1) \
-                and clusterlon[i] < (row['Longitude']+1) and \
-                    clusterlon[i] > (row['Longitude']-1):
+            if clusterlat[i] < (row['Latitude']+tresh) and \
+               clusterlat[i] > (row['Latitude']-tresh) \
+                and clusterlon[i] < (row['Longitude']+tresh) and \
+                    clusterlon[i] > (row['Longitude']-tresh):
                     portdata['In cluster?'][index] += 1  
     
     portdata = portdata[portdata['In cluster?']>0]
     
     #Check integrity of portdata vs. cluster:                 
-    if portdata['In cluster?'].sum() != k:
+    if portdata['In cluster?'].sum() != n_clusters_:
         print('ERROR: Found ' + str(portdata['In cluster?'].sum()) + \
-              ' ports to ' + str(k) + ' clusters')
+              ' ports to ' + str(n_clusters_) + ' clusters')
     
     portdata = portdata.nlargest(len(portdata),'In cluster?')
     
     return portdata
     
-def ShippingNetwork():
+def ShippingNetwork(labels):
     global route
     MMSI = pd.Series(mmsi).unique()
     route = list()
     
+    #Visiting sequence for each ship
     for ship in MMSI:
         r = list()
         for i in range(0,len(mmsi)):
             if mmsi[i] == ship:
                 if not r:
-                    r.append(Hcluster[i])
+                    r.append(labels[i])
                 else:
-                    if Hcluster[i] != Hcluster[i-1]:
-                        r.append(Hcluster[i])
+                    if labels[i] != labels[i-1]:
+                        r.append(labels[i])
         route.append(r)
         
+    #Make a network graph:
+    G=nx.Graph()
+    
+    for i in range(1,len(clusterlat)+1):
+        G.add_node(i,pos=(clusterlat[i-1],clusterlon[i-1]))
+    
+    routeMatrix = np.zeros((n_clusters_+1,n_clusters_+1))
+    
+    for r in route:
+        if len(r)>1:
+            for i in range(1,len(r)):
+                x = r[i-1]
+                y = r[i]
+                routeMatrix[x][y] = routeMatrix[x][y] + 1
+
+    for i in range(1,len(routeMatrix[0])):
+        for j in range(1,len(routeMatrix[0])):
+            if (routeMatrix[i][j] > 0) or (routeMatrix[j][i] > 0):
+                w = routeMatrix[i][j] + routeMatrix[i][j]
+                G.add_edge(i,j,weight=w)
+                routeMatrix[i][j] = 0
+                routeMatrix[j][i] = 0
+                if w == 0:
+                    G.remove_edge(i,j)
+    
+    #Visualizing the network:
+    fig, ax = plt.subplots(figsize=(18,18))
+    
+    #Basemap worldmap
+    minlon = max(-180,min(plotlon)-5) #-10
+    minlat = max(-90,min(plotlat)-5) #-10
+    maxlon = min(180,max(plotlon)+5) #+10
+    maxlat = min(90,max(plotlat)+5) #+10
+    lat0 = (maxlat+minlat)/2
+    lon0 = (maxlon+minlon)/2
+    lat1 = (maxlat+minlat)/2-20
+        
+    m = Basemap(llcrnrlon=minlon,llcrnrlat=minlat,urcrnrlon=maxlon,urcrnrlat=maxlat,\
+                rsphere=(6378137.00,6356752.3142),\
+                resolution='l',projection='cyl',\
+                lat_0=lat0,lon_0=lon0,lat_ts = lat1)    
+    m.drawmapboundary(fill_color='black')
+    m.fillcontinents(color='lightgray',lake_color='white',zorder=0)
+    
+    #Draw network on map
+    pos=nx.get_node_attributes(G,'pos')
+    nx.draw(G,pos,alpha=0.5,node_color='r',node_size=50,cmap=plt.cm.Blues)
+    labels = nx.get_edge_attributes(G,'weight')
+    #nx.draw_networkx_edge_labels(G,pos,edge_labels=labels)
+
     return route           
                 
             
@@ -200,8 +409,6 @@ def PolygonAnalysis(lowtime,hightime):
     # Creating DataFram for analytical easiness           
     df = pandas.DataFrame({'Speed': speeds, 'MMSI': mmsi, 'Unixtime': timestep, \
                              'Lat': plotlat, 'Lon': plotlon})
-    #df['Date/Time'] = df['Unixtime'].apply(lambda x: \
-    #                  datetime.fromtimestamp(x).strftime("%d/%m/%Y %H:%M:%S"))
 
     polygons = LC.generate_polygons()
     
@@ -210,14 +417,13 @@ def PolygonAnalysis(lowtime,hightime):
 
     #Taking time:
     A = time.time()
-    
     for i in range(0,len(plotlat)):
         if LC.point_inside_polygon(plotlon[i],plotlat[i],polygons[0]):
             df.set_value(i,'Zone','Atlantic')
         elif LC.point_inside_polygon(plotlon[i],plotlat[i],polygons[1]):
-            df.set_value(i,'Zone','East Pacific')
+            df.set_value(i,'Zone','Pacific') #East Pacific
         elif LC.point_inside_polygon(plotlon[i],plotlat[i],polygons[2]):
-            df.set_value(i,'Zone','West Pacific')
+            df.set_value(i,'Zone','Pacific') #West Pacific
         elif LC.point_inside_polygon(plotlon[i],plotlat[i],polygons[3]):
             df.set_value(i,'Zone','Indian Ocean')
         elif LC.point_inside_polygon(plotlon[i],plotlat[i],polygons[4]):
@@ -230,87 +436,79 @@ def PolygonAnalysis(lowtime,hightime):
             df.set_value(i,'Zone','Oceania')
         else: 
             df.set_value(i,'Zone','Outside Zones')
-
     print('Polygon iteration time is: ' + str(time.time()-A) + ' s')      
     
     Atlantic = df[df['Zone'] == 'Atlantic']
-    EastPacific = df[df['Zone'] == 'East Pacific']
-    WestPacific = df[df['Zone'] == 'West Pacific']
+    Pacific = df[df['Zone'] == 'Pacific']
     IndianOcean = df[df['Zone'] == 'Indian Ocean']
     Mediterranean = df[df['Zone'] == 'Mediterranean']
     NorthSea = df[df['Zone'] == 'North Sea']
     SEAsia = df[df['Zone'] == 'SE Asia']
     Oceania = df[df['Zone'] == 'Oceania']    
     
-    minmaxtime = (lowtime,hightime)
-    
-    Timestamps = LC.get_timevector(minmaxtime)
+    Timestamps = LC.get_timevector(lowtime,hightime)
     #print(Timestamps)
-    
-    #For plotting:
-    dates = [datetime.fromtimestamp(u).strftime('%d/%m/%Y') for u in Timestamps]
+    dates = [datetime.datetime.fromtimestamp(u).strftime('%d/%m/%Y') for u in Timestamps]
     #print(dates)
-    dates.pop(len(dates)-1)
-    
-    #print(Atlantic[Atlantic['Unixtime']<Timestamps[1]]['MMSI'].nunique())
-    #print(Atlantic[(Atlantic['Unixtime']>=Timestamps[1]) & (Atlantic['Unixtime']<Timestamps[2])]['MMSI'].nunique())
-    
-    #Filter data for monthly basis
-    number_of_messages_monthly_Atlantic = LC.monthly_filter(np.array(Atlantic['Unixtime']),np.array(Atlantic['MMSI']),Timestamps)
-    number_of_messages_monthly_EastPacific = LC.monthly_filter(np.array(EastPacific['Unixtime']),np.array(EastPacific['MMSI']),Timestamps)
-    number_of_messages_monthly_WestPacific = LC.monthly_filter(np.array(WestPacific['Unixtime']),np.array(WestPacific['MMSI']),Timestamps)
-    number_of_messages_monthly_IndianOcean = LC.monthly_filter(np.array(IndianOcean['Unixtime']),np.array(IndianOcean['MMSI']),Timestamps)
-    number_of_messages_monthly_Medittarnean= LC.monthly_filter(np.array(Mediterranean['Unixtime']),np.array(Mediterranean['MMSI']),Timestamps)
-    number_of_messages_monthly_NorthSea = LC.monthly_filter(np.array(NorthSea['Unixtime']),np.array(NorthSea['MMSI']),Timestamps)
-    number_of_messages_monthly_SEAsia = LC.monthly_filter(np.array(SEAsia['Unixtime']),np.array(SEAsia['MMSI']),Timestamps)
-    number_of_messages_monthly_Oceania = LC.monthly_filter(np.array(Oceania['Unixtime']),np.array(Oceania['MMSI']),Timestamps)
-    number_of_messages_monthly_World = LC.monthly_filter(np.array(df['Unixtime']),np.array(df['MMSI']),Timestamps)
 
-    #Filter unique vessels: list av list av mmsi per mnd 
-    unique_vessels_monthly_Atlantic = [pd.Series(row[1]).nunique() for row in pd.Series(number_of_messages_monthly_Atlantic).iteritems()]
-    unique_vessels_monthly_EastPacific = [pd.Series(row[1]).nunique() for row in pd.Series(number_of_messages_monthly_EastPacific).iteritems()]
-    unique_vessels_monthly_WestPacific = [pd.Series(row[1]).nunique() for row in pd.Series(number_of_messages_monthly_WestPacific).iteritems()]
-    unique_vessels_monthly_IndianOcean = [pd.Series(row[1]).nunique() for row in pd.Series(number_of_messages_monthly_IndianOcean).iteritems()]
-    unique_vessels_monthly_Medittarnean = [pd.Series(row[1]).nunique() for row in pd.Series(number_of_messages_monthly_Medittarnean).iteritems()]
-    unique_vessels_monthly_NorthSea = [pd.Series(row[1]).nunique() for row in pd.Series(number_of_messages_monthly_NorthSea).iteritems()]
-    unique_vessels_monthly_SEAsia = [pd.Series(row[1]).nunique() for row in pd.Series(number_of_messages_monthly_SEAsia).iteritems()]
-    unique_vessels_monthly_Oceania = [pd.Series(row[1]).nunique() for row in pd.Series(number_of_messages_monthly_Oceania).iteritems()]
-    unique_vessels_monthly_World = [pd.Series(row[1]).nunique() for row in pd.Series(number_of_messages_monthly_World).iteritems()]
+    A = time.time()
+    #Filter data for monthly basis
+    speeds_monthly_Atlantic,unique_vessels_monthly_Atlantic = LC.monthly_filter(Atlantic,Timestamps)
+    speeds_monthly_Pacific,unique_vessels_monthly_Pacific = LC.monthly_filter(Pacific,Timestamps)
+    speeds_monthly_IndianOcean,unique_vessels_monthly_IndianOcean = LC.monthly_filter(IndianOcean,Timestamps)
+    speeds_monthly_Medittarnean,unique_vessels_monthly_Medittarnean = LC.monthly_filter(Mediterranean,Timestamps)
+    speeds_monthly_NorthSea,unique_vessels_monthly_NorthSea = LC.monthly_filter(NorthSea,Timestamps)
+    speeds_monthly_SEAsia,unique_vessels_monthly_SEAsia = LC.monthly_filter(SEAsia,Timestamps)
+    speeds_monthly_Oceania,unique_vessels_monthly_Oceania = LC.monthly_filter(Oceania,Timestamps)
+    speeds_monthly_World,unique_vessels_monthly_World = LC.monthly_filter(df,Timestamps)
+    print('Monthly filtering time is: ' + str(time.time()-A) + ' s') 
     
     #Plotting the vessel distribution    
     timeperiod = list(range(0,(len(Timestamps)-1)))
+    plt.style.use('bmh')
+    
+    #Number of unique vessels
     fig, ax = plt.subplots(figsize=(15,6))
-    plt.xlabel ('Months from %s' % str(dates[0]))
+    plt.title('Number of unique vessels in zone')
+    plt.xlabel ('Months from %s to %s' % (str(dates[0]),str(dates[len(dates)-1])))
     plt.ylabel('Vessels in zone')
-    #plt.xticks(timeperiod, dates)
     ax.plot(timeperiod,unique_vessels_monthly_Atlantic,label = 'Atlantic')
-    ax.plot(timeperiod,unique_vessels_monthly_EastPacific,label = 'East Pacific')
-    ax.plot(timeperiod,unique_vessels_monthly_WestPacific, label = 'West Pacific')
+    ax.plot(timeperiod,unique_vessels_monthly_Pacific,label = 'Pacific')
     ax.plot(timeperiod,unique_vessels_monthly_IndianOcean, label = 'Indian Ocean')
     ax.plot(timeperiod,unique_vessels_monthly_Medittarnean, label = 'Mediettarnean Ocean')
     ax.plot(timeperiod,unique_vessels_monthly_NorthSea,label = 'North Sea')
     ax.plot(timeperiod,unique_vessels_monthly_SEAsia, label = 'South East Asia')
     ax.plot(timeperiod,unique_vessels_monthly_Oceania, label = 'Oceania')
     ax.plot(timeperiod,unique_vessels_monthly_World, label = 'World')
-    
     #Placeing the legend outside the plot box:
-    legend = ax.legend(bbox_to_anchor=(0,1.02,1,0.2), loc="lower left",
-                mode="expand", borderaxespad=0, ncol=3)
-    
+    legend = ax.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
     frame = legend.get_frame()
     frame.set_facecolor('0.90')
     for label in legend.get_lines():
         label.set_linewidth(1)
- #   plt.plot(x1,y1,x2,y2,x3,y3)
-    plt.axis([0,(len(Timestamps)-1),0,210])
     plt.show()
-    print(unique_vessels_monthly_World)
+    
+    #Mean speed vessels
+    fig, ax = plt.subplots(figsize=(15,6))
+    plt.title('Average speed per month per zone')
+    plt.xlabel ('Months from %s to %s' % (str(dates[0]),str(dates[len(dates)-1])))
+    plt.ylabel('Speed [knots]')
+    ax.plot(timeperiod,speeds_monthly_Atlantic,label = 'Atlantic')
+    ax.plot(timeperiod,speeds_monthly_Pacific,label = 'Pacific')
+    ax.plot(timeperiod,speeds_monthly_World, label = 'World')
+    #Placeing the legend outside the plot box:
+    legend = ax.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+    frame = legend.get_frame()
+    frame.set_facecolor('0.90')
+    for label in legend.get_lines():
+        label.set_linewidth(1)
+    plt.show()    
     
     return df
    
     # Statistical Data
 #   AtlanticMean = st.mean(AtlanticSpeed)
-#    AtlanticVar = st.variance(AtlanticSpeed)
+#   AtlanticVar = st.variance(AtlanticSpeed)
     """
     plt.figure()
     n, bins, patches = plt.hist([timeperiod,unique_vessels_monthly_atlantic])
@@ -339,8 +537,6 @@ def PolygonAnalysis(lowtime,hightime):
 # THE FOLLOWING PART PLOTS HISTOGRAM OF SPEED DIST #
 ####################################################
 
-
-from datetime import datetime
 def GeoDistribution():
     global PacLat
     global PacLon
@@ -402,7 +598,7 @@ def SpeedHistogram():
     histval = histval1/sum(histval1)
     width = 0.7 * (binsval[1] - binsval[0])
     center = (binsval[:-1] + binsval[1:]) / 2
-    plt.bar(center, histval, align='center', width=width,color='k')
+    plt.bar(center, histval, align='center', width=width) #color='k'
     plt.xlabel('Speed [knots]')
     plt.ylabel('Fraction of time')
     plt.show()
@@ -413,7 +609,7 @@ def SpeedHistogram():
     histval = histval1/sum(histval1)
     width = 0.7 * (binsval[1] - binsval[0])
     center = (binsval[:-1] + binsval[1:]) / 2
-    plt.bar(center, histval, align='center', width=width,color='k')
+    plt.bar(center, histval, align='center', width=width)
     plt.xlabel('Draught [meters]')
     plt.ylabel('Fraction of time')
     plt.show()
@@ -435,21 +631,6 @@ def GlobalMap():
 
 #########################################################
 def LocalMap():
-    '''
-    clusterlat = list([  55.05639434, -118.20721601,  103.70615966,   32.42515   ,
-        139.68368333,   39.15758613,   14.53560833,  148.2011    ,
-         79.83414667,  121.63154333,   -5.43532222,    4.26149833,
-         35.53425981,   54.03331389,  132.96183333,   23.508255  ,
-       -122.31935778,  117.775     ,  101.26446286,   50.19599167,
-         32.31820261])
-        
-    clusterlon = list([ 25.00425171,  33.7442034 ,   1.25787193,  30.26798929,
-        35.40101667,  21.46019955,  35.82060833, -38.26788333,
-         6.94608917,  31.34875667,  36.14576111,  51.35132167,
-        33.90931056,  16.94192   ,  42.81025   ,  37.83974   ,
-        37.79714722,  39.00233333,   2.8882519 ,  26.50235   ,  31.41053333])
-        '''
-    
     minlon = max(-180,min(plotlon)-5) #-10
     minlat = max(-90,min(plotlat)-5) #-10
     maxlon = min(180,max(plotlon)+5) #+10
@@ -503,7 +684,7 @@ def DraughtInterpolate():
     for i in range(0,len(timestep)):
         
         if timestep[i] >= draughttime[0]:
-            idx = (np.abs(array(draughttime)-timestep[i])).argmin()
+            idx = (np.abs(np.array(draughttime)-timestep[i])).argmin()
             IntDraught.append(draught[idx])
             draughtSpeed.append(speeds[i])
             draughtIntTime.append(timestep[i])
@@ -850,14 +1031,13 @@ def SpeedForAnalysis():
     AnDiff.append(1)
     AnSteps = list()
     for i in range(0,len(AnTime)):
-        Unixconv = datetime.fromtimestamp(AnTime[i])
+        Unixconv = datetime.datetime.fromtimestamp(AnTime[i])
         AnSteps.append(Unixconv)
-
 
 ################################################
 ## THE FOLLOWING PART PLOTS INTERVAL FREQUENCY #
-################################################
-def IntervalFreq():    
+################################################  
+        
     Count = list()
     Number = list()
     for i in range(0,360):
@@ -899,7 +1079,7 @@ def GeoAnalysis(max_lon,max_lat,min_lon,min_lat,minspeed):
         
     AtSteps = list()
     for i in range(0,len(AtTime)):
-        Unixconv = datetime.fromtimestamp(AtTime[i])
+        Unixconv = datetime.datetime.fromtimestamp(AtTime[i])
         AtSteps.append(Unixconv)
 
 

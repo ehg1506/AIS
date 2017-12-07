@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Fri Feb 17 10:52:25 2017
+Created on Wed Nov  1 13:41:00 2017
 
-@author: jonleonhardsen
+@author: PatrickAndreNaess
 """
 
 import PlotVesselPatrick as PV
@@ -16,27 +16,26 @@ ports = '/Users/PatrickAndreNaess/Documents/PYTHON/LINERLIB-master/data/ports.cs
 
 #All methods are run from this script, 1 = run
 SegmentAnalysis = 1 #1 = analyze segment, 0 = analyze vessel
-GlobalMap = 0
+#GlobalMap = 0
 LocalMap = 0
 DraughtInterpolate = 0
-TradeDirectionsSuez = 0
-TradeDirectionPacific = 0
-FreightRateImpact = 0
-MonthlyAverage = 0
-GeoDistribution = 0
+#TradeDirectionsSuez = 0
+#TradeDirectionPacific = 0
+#FreightRateImpact = 0
+#MonthlyAverage = 0
+#GeoDistribution = 0
 SpeedDev = 0
 SpeedHistogram = 0
 SpeedForAnalysis = 0
 GeoAnalysis = 0
 CumulatedSpeed = 0
 DraughtAnalysis = 0
-OrnsteinUhlenbeckGenerator = 0
+#OrnsteinUhlenbeckGenerator = 0
 
-ClusterPorts = 0
-#WriteOutTable = 0 Denne er puttet inn i WorldOceanAnalysis
+DataClusterPorts = 0
 PortAnalysis = 0
 Network = 0
-WorldOceanAnalysis = 1 
+WorldOceanAnalysis = 0
 
 BigShips = 1
 Panamax = 0
@@ -70,10 +69,10 @@ elif Loc == 7:
     Pos = Panama
 
 #Always analyse from 01/xx/xxxx --> PolygonAnalysis
-lowtime = '01/01/2013'
+lowtime = '01/01/2015'
 hightime = '01/01/2016'
 maxspeed = 25
-minspeed = 5
+minspeed = 0
 
 unixlow = datetime.datetime.strptime(lowtime, "%d/%m/%Y").timestamp()
 unixhigh = datetime.datetime.strptime(hightime, "%d/%m/%Y").timestamp()
@@ -81,13 +80,13 @@ unixhigh = datetime.datetime.strptime(hightime, "%d/%m/%Y").timestamp()
 #PV calls PlotVessels.py, which essentially does all data extracting, initial analyses,
 #and visualizations of AIS data.  
 if SegmentAnalysis == 1:
-    PV.ExtractData(Database,Pos[0],Pos[1],Pos[2],Pos[3],unixlow,unixhigh \
+    plotlon, plotlat=PV.ExtractData(Database,Pos[0],Pos[1],Pos[2],Pos[3],unixlow,unixhigh \
                    ,maxspeed,minspeed,SegmentAnalysis)
 else:
     PV.ExtractData(Vessel,Pos[0],Pos[1],Pos[2],Pos[3])
 
-if ClusterPorts == 1:
-   clusterlat,clusterlon,Hcluster = PV.DataClusterPorts(ports)
+if DataClusterPorts == 1:
+   clusterlat,clusterlon,labels = PV.ClusterPorts()
 
 if GlobalMap == 1:    
     PV.GlobalMap()
@@ -126,7 +125,7 @@ if PortAnalysis == 1:
 if WorldOceanAnalysis == 1:
     BigD = PV.PolygonAnalysis(unixlow,unixhigh)
 if Network == 1:
-    route = PV.ShippingNetwork()
+    route = PV.ShippingNetwork(labels)
     
 if LocalMap == 1:    
     PV.LocalMap()
