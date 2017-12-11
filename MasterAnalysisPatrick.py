@@ -15,33 +15,25 @@ Database = '/Users/PatrickAndreNaess/Desktop/ContainerFleet.db'
 ports = '/Users/PatrickAndreNaess/Documents/PYTHON/LINERLIB-master/data/ports.csv'
 
 #All methods are run from this script, 1 = run
-SegmentAnalysis = 1 #1 = analyze segment, 0 = analyze vessel
-#GlobalMap = 0
+Analysis = 1 #1 = analyze sample
 LocalMap = 0
 DraughtInterpolate = 0
-#TradeDirectionsSuez = 0
-#TradeDirectionPacific = 0
-#FreightRateImpact = 0
-#MonthlyAverage = 0
-#GeoDistribution = 0
+TradeDirectionsSuez = 0
+TradeDirectionPacific = 0
+
 SpeedDev = 0
-SpeedHistogram = 0
-SpeedForAnalysis = 0
+SpeedForAnalysis = 0 # Message interval
 GeoAnalysis = 0
 CumulatedSpeed = 0
 DraughtAnalysis = 0
-#OrnsteinUhlenbeckGenerator = 0
+DraughtHistogram = 0
 
-DataClusterPorts = 0
-PortAnalysis = 0
-Network = 0
-WorldOceanAnalysis = 0
+DataClusterPorts = 1 # Cluster
+PortAnalysis = 1 # LINNERLIB
+Network = 1 # Network
 
-BigShips = 1
-Panamax = 0
-MuSim = 0
-FuelCalc = 0
-FuelAgg = 0
+WorldOceanAnalysis = 0 # Polygon
+
 
 Pacific = [-120,63,12,28]
 Atlanter = [0,53,-80,33]
@@ -69,9 +61,9 @@ elif Loc == 7:
     Pos = Panama
 
 #Always analyse from 01/xx/xxxx --> PolygonAnalysis
-lowtime = '01/01/2015'
+lowtime = '01/01/2011'
 hightime = '01/01/2016'
-maxspeed = 25
+maxspeed = 0.5
 minspeed = 0
 
 unixlow = datetime.datetime.strptime(lowtime, "%d/%m/%Y").timestamp()
@@ -79,17 +71,12 @@ unixhigh = datetime.datetime.strptime(hightime, "%d/%m/%Y").timestamp()
     
 #PV calls PlotVessels.py, which essentially does all data extracting, initial analyses,
 #and visualizations of AIS data.  
-if SegmentAnalysis == 1:
-    plotlon, plotlat=PV.ExtractData(Database,Pos[0],Pos[1],Pos[2],Pos[3],unixlow,unixhigh \
-                   ,maxspeed,minspeed,SegmentAnalysis)
-else:
-    PV.ExtractData(Vessel,Pos[0],Pos[1],Pos[2],Pos[3])
+if Analysis == 1:
+    PV.ExtractData(Database,Pos[0],Pos[1],Pos[2],Pos[3],
+                   unixlow,unixhigh,maxspeed,minspeed,Analysis)
 
 if DataClusterPorts == 1:
    clusterlat,clusterlon,labels = PV.ClusterPorts()
-
-if GlobalMap == 1:    
-    PV.GlobalMap()
 
 if DraughtInterpolate == 1:
     PV.DraughtInterpolate()    
@@ -97,16 +84,8 @@ if TradeDirectionsSuez == 1:
     PV.TradeDirectionSuez()
 if TradeDirectionPacific == 1:
     PV.TradeDirectionPacific()
-if MonthlyAverage == 1:
-    PV.MonthlyAverage()
-if FreightRateImpact == 1:
-    PV.FreightRateImpact()
-if GeoDistribution == 1:    
-    PV.GeoDistribution()
 if SpeedDev == 1:
     PV.SpeedDev()
-if SpeedHistogram == 1:
-    PV.SpeedHistogram()
 if SpeedForAnalysis == 1:
     PV.SpeedForAnalysis()   
 if GeoAnalysis == 1:
@@ -129,4 +108,3 @@ if Network == 1:
     
 if LocalMap == 1:    
     PV.LocalMap()
-    

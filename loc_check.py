@@ -9,13 +9,14 @@ Created on Wed Nov  8 10:12:39 2017
 #2 and 3 is the pacific
 
 import numpy as np
-import matplotlib.path as mpltPath
 import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
-import sqlite3
 from mpl_toolkits.basemap import Basemap
 from datetime import datetime
 import statistics as st
+from geopy.distance import great_circle
+from shapely.geometry import MultiPoint
+import pandas as pd
 
       
 def generate_polygons():
@@ -192,19 +193,52 @@ def get_timevector(lt,ht):
 def monthly_filter(DF,timestamps):
     monthly_mean_speeds = [[] for i in range(0,(len(timestamps)-1))]
     monthly_unique = [[] for i in range(0,(len(timestamps)-1))]
+    monthly_message_interval = [[] for i in range(0,(len(timestamps)-1))]
 
     for j in range(0,len(monthly_mean_speeds)):
         X = DF[(DF['Unixtime'] >= timestamps[j]) & (DF['Unixtime'] < timestamps[j+1])]
         
+        #SPEED
         if len(X['Speed']) == 0:
             monthly_mean_speeds[j].append(0)
         else:
-            monthly_mean_speeds[j].append(st.mean(X['Speed'].tolist()))
+            monthly_mean_speeds[j].append(st.mean(X['Speed']))
+        
+        #MESSAGE INTERVAL
+        if len(X['Unixtime']) < 2:
+            hours = 24*30 # One month if no messages, in hours
+        else:    
+            time = st.mean(abs(np.diff(X['Unixtime'])))
+            hours = (datetime.fromtimestamp(time)-datetime(1970,1,1)).total_seconds()/60/60
+        monthly_message_interval[j].append(hours)
+        
+        #UNIQUE VESSELS
         monthly_unique[j].append(X['MMSI'].nunique())
                     
-    return monthly_mean_speeds,monthly_unique
+    return monthly_mean_speeds,monthly_unique,monthly_message_interval
 
-def centeroidnp(arr):
-    x = [p[0] for p in arr]
-    y = [p[1] for p in arr]
-    return (sum(x) / len(arr), sum(y) / len(arr))
+def percentageMonthly(zone, world):
+    percent = list()
+    
+    for i in range(0,len(world)):
+        p = zone[i][0]/world[i][0]*100
+        percent.append(p)
+        
+    return percent
+
+def get_centermost_point(plotlon,plotlat,n_clusters_,labels):
+    df = pd.DataFrame({'lon': plotlon, 'lat': plotlat})
+    coords = df.as_matrix(columns=['lon', 'lat'])
+    clusters = pd.Series([coords[labels==n] for n in range(n_clusters_)])
+    
+    centroid = list()
+    for i in range(0,len(clusters)):
+        if len(clusters[i]) >=1:
+            centroid.append((MultiPoint(clusters[i]).centroid.x, MultiPoint(clusters[i]).centroid.y))
+    
+    centermost_point = list()
+    for i in range(0,len(clusters)):
+        if len(clusters[i]) >=1:
+            centermost_point.append(min(clusters[i], key=lambda point: great_circle(point, centroid[i]).m))
+
+    return tuple(centermost_point)
