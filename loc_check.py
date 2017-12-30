@@ -5,12 +5,9 @@ Created on Wed Nov  8 10:12:39 2017
 
 @author: erikgrundt
 """
-#Location is a number from 1 to 5, corresponding to the zone of interrest
-#2 and 3 is the pacific
 
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.patches import Polygon
 from mpl_toolkits.basemap import Basemap
 from datetime import datetime
 import statistics as st
@@ -37,6 +34,7 @@ def generate_polygons():
     polygons.append(polygon_atlantic)
     # East Pacific 
     polygon_Eastpacific =[[-142,70] ,
+                      [-100,50] ,
                       [-103.227539,25.443275] ,
                       [-76.245117,7.31882],
                       [-60.644531,-18.646245] ,
@@ -48,8 +46,7 @@ def generate_polygons():
     polygons.append(polygon_Eastpacific)
     # West Pacific
     polygon_WestPacific = [[180,60],
-                [143.525391,59.085739],
-                [118.828125,38.959409],
+                [130,62],
                 [105.292969,21.453069],
                 [121.816406,17.978733],
                 [131.835938,1.230374],
@@ -71,7 +68,7 @@ def generate_polygons():
                     [11.118164,54.110934],
                     [50,50],
                     [33.04687,29.075375],
-                    [11.777,33.358]]
+                    [25,-10]]
     polygon_medi.append(polygon_medi[0])
     polygons.append(polygon_medi)
 
@@ -104,21 +101,7 @@ def generate_polygons():
                  [131.835938,1.230374]]
     polygon_O.append(polygon_O[0])
     polygons.append(polygon_O)   
-    
-    '''
-    #Small zone aoround
-    #Suez and Red Sea
-    #Can be included in further analysis
-    PointS_1 = [31.591187,30.656816]
-    PointS_2 = [33.063354,30.883369]
-    PointS_3 = [33.189697,27.907058]
-    PointS_4 = [33.892822,28.15919]
-    PointS_5 = [38.320313,14.264383]
-    PointS_6 = [44.121094,17.308688]
-    polygon_suez = [PointS_1, PointS_2, PointS_3, PointS_4, PointS_5, PointS_6]
-    polygon_suez.append(polygon_suez[0])
-    polygons.append(polygon_suez)
-    '''
+
     return polygons
 
 
@@ -144,33 +127,40 @@ def point_inside_polygon(x,y,poly):
 
 #Takes an input argument of polygons and plotting them! Should be 
 def ocean_polygon(polygons):
-    plt.figure(figsize=(20,20))
+    fig, ax = plt.subplots(figsize=(20,20))
     m = Basemap(projection='cyl',lon_0=0,resolution='l')
-    m.drawparallels(np.arange(-90,90,20),labels=[1,1,0,1],color='k')       
-    m.drawmeridians(np.arange(-180,180,20),labels=[1,1,0,1],color='k')
+    #m.drawparallels(np.arange(-90,90,20),labels=[1,1,0,1],color='k')       
+    #m.drawmeridians(np.arange(-180,180,20),labels=[1,1,0,1],color='k')
     m.drawmapboundary(fill_color='white')
-    m.fillcontinents(color='black',lake_color='white')
-    m.drawcountries()
-    m.drawcoastlines()
+    m.fillcontinents(color='lightgrey',lake_color='white')
+    #m.drawcountries()
+    #m.drawcoastlines()
     
     for i in range(0,len(polygons)):
         x,y = zip(*polygons[i])
         m.plot(x,y,marker='.')
-        
+        ax.fill(x, y,alpha=0.2)
     plt.show()    
     #plt.savefig('/Users/erikgrundt/Desktop/currentpoly.eps',\
+    
+    polygons = generate_polygons()
+    ocean_polygon(polygons)
+
 
 def plot_inside_polygons(lon,lat):
-    plt.figure(figsize=(20,20))
+    fig, ax = plt.subplots(figsize=(18,18))
     m = Basemap(projection='cyl',lon_0=0,resolution='l')
-    m.drawparallels(np.arange(-90,90,20),labels=[1,1,0,1],color='k')       
-    m.drawmeridians(np.arange(-180,180,20),labels=[1,1,0,1],color='k')
+    #m.drawparallels(np.arange(-90,90,20),labels=[1,1,0,1],color='k')       
+    #m.drawmeridians(np.arange(-180,180,20),labels=[1,1,0,1],color='k')
     m.drawmapboundary(fill_color='white')
-    m.fillcontinents(color='black',lake_color='white')
-    m.drawcountries()
-    m.drawcoastlines()
+    m.fillcontinents(color='lightgray',lake_color='white')
     x,y = m(lon,lat)
-    m.scatter(x,y,0.01,marker='o',c='blue')
+    m.scatter(x,y,0.01,marker='o',c='black')
+        
+    x,y = zip(*polygons[0])
+    m.plot(x,y,marker='.')
+    ax.fill(x, y,alpha=0.2)
+
     plt.show()
 
 def get_timevector(lt,ht):
@@ -194,6 +184,7 @@ def monthly_filter(DF,timestamps):
     monthly_mean_speeds = [[] for i in range(0,(len(timestamps)-1))]
     monthly_unique = [[] for i in range(0,(len(timestamps)-1))]
     monthly_message_interval = [[] for i in range(0,(len(timestamps)-1))]
+    monthly_stdev_speeds = [[] for i in range(0,(len(timestamps)-1))]
 
     for j in range(0,len(monthly_mean_speeds)):
         X = DF[(DF['Unixtime'] >= timestamps[j]) & (DF['Unixtime'] < timestamps[j+1])]
@@ -201,8 +192,10 @@ def monthly_filter(DF,timestamps):
         #SPEED
         if len(X['Speed']) == 0:
             monthly_mean_speeds[j].append(0)
+            monthly_stdev_speeds[j].append(0)
         else:
             monthly_mean_speeds[j].append(st.mean(X['Speed']))
+            monthly_stdev_speeds[j].append((X['Speed']))#st.stdev
         
         #MESSAGE INTERVAL
         if len(X['Unixtime']) < 2:
@@ -215,7 +208,7 @@ def monthly_filter(DF,timestamps):
         #UNIQUE VESSELS
         monthly_unique[j].append(X['MMSI'].nunique())
                     
-    return monthly_mean_speeds,monthly_unique,monthly_message_interval
+    return monthly_mean_speeds,monthly_stdev_speeds,monthly_unique,monthly_message_interval
 
 def percentageMonthly(zone, world):
     percent = list()
